@@ -6,6 +6,9 @@ on:
   workflow_dispatch:
   schedule:
     - cron: 35 2 * * *
+permissions:
+  contents: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -15,10 +18,10 @@ jobs:
         run: sleep $((RANDOM % 301))
 
       - name: 🔌 Check out code
-        uses: actions/checkout@main
+        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a
 
       - name: 🔨 Setup Node.js environment
-        uses: actions/setup-node@main
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 18
           cache: npm
@@ -30,32 +33,30 @@ jobs:
       
       - name: 📹 Restore cached Cookie
         id: cache-cookie-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: .token
           key: ${{ runner.os }}-cache-token
           restore-keys: ${{ runner.os }}-cache-token-
 
       - name: 🔧 Init secrets
-        uses: shine1594/secrets-to-env-action@master
-        with:
-          secrets: ${{ toJSON(secrets) }}
-          secrets_env: production
-          prefix_prod: ""
-          file_name_prod: .env
+        env:
+          ALL_SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: |
+          node -e "const fs=require('fs');const s=JSON.parse(process.env.ALL_SECRETS_JSON);fs.writeFileSync('.env',Object.entries(s).map(([k,v])=>k+'='+v).sort().join('\n'));console.log('.env written: '+Object.keys(s).length+' vars')"
 
       - name: 📡 Init dependencies
         run: npm install
 
       - name: 🚀 Run
-        uses: nick-fields/retry@master
+        uses: nick-fields/retry@1c62e0697831d444be410bc770cc1576ab22de08
         with:
           timeout_minutes: 30
           max_attempts: 3
           command: npm start
       
       - name: 📹 Save cached Cookie
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: .token
           key: ${{ runner.os }}-cache-token-${{ hashFiles('.token/*.json') }}
@@ -69,11 +70,3 @@ jobs:
           git pull --rebase --autostash
           git commit --allow-empty -m "Keep Running..."
           git push
-
-      - name: 🎉 Delete old workflow run
-        uses: Mattraks/delete-workflow-runs@main
-        with:
-          token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          retain_days: 0
-          keep_minimum_runs: 50
